@@ -1,0 +1,62 @@
+// Level 3 - App 2: Tampering Proxy (edit signature)
+#include <iostream>
+#include <string>
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#include <fstream>
+#pragma comment(lib, "ws2_32.lib")
+
+using namespace std;
+
+int main() {
+    WSADATA wsaData;
+    WSAStartup(MAKEWORD(2, 2), &wsaData);
+
+    SOCKET proxySock = socket(AF_INET, SOCK_STREAM, 0);
+    sockaddr_in proxyAddr;
+    proxyAddr.sin_family = AF_INET;
+    proxyAddr.sin_port = htons(5002);
+    proxyAddr.sin_addr.s_addr = INADDR_ANY;
+
+    bind(proxySock, (sockaddr*)&proxyAddr, sizeof(proxyAddr));
+    listen(proxySock, SOMAXCONN);
+
+    cout << "Tampering proxy listening on port 5002...\n";
+
+    SOCKET clientSock = accept(proxySock, nullptr, nullptr);
+    char buffer[8192];
+    int bytesRead = recv(clientSock, buffer, sizeof(buffer), 0);
+    buffer[bytesRead] = '\0';
+
+    string data(buffer);
+    size_t pos1 = data.find('\n');
+    size_t pos2 = data.find('\n', pos1 + 1);
+
+    string message = data.substr(0, pos1);
+    string signature = data.substr(pos1 + 1, pos2 - pos1 - 1);
+    string pubKeyData = data.substr(pos2 + 1);
+
+    cout << "\nOriginal Signature: " << signature << endl;
+    cout << "You can tamper with the signature now.\nNew Signature (leave blank to keep same): ";
+    string newSig;
+    getline(cin, newSig);
+
+    if (!newSig.empty()) signature = newSig;
+    string tamperedData = message + "\n" + signature + "\n" + pubKeyData;
+
+    SOCKET forwardSock = socket(AF_INET, SOCK_STREAM, 0);
+    sockaddr_in destAddr;
+    destAddr.sin_family = AF_INET;
+    destAddr.sin_port = htons(5003);
+    inet_pton(AF_INET, "127.0.0.1", &destAddr.sin_addr);
+
+    connect(forwardSock, (sockaddr*)&destAddr, sizeof(destAddr));
+    send(forwardSock, tamperedData.c_str(), tamperedData.length(), 0);
+
+    cout << "Data forwarded to final verifier.\n";
+    closesocket(clientSock);
+    closesocket(forwardSock);
+    closesocket(proxySock);
+    WSACleanup();
+    return 0;
+}
