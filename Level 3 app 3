@@ -1,0 +1,85 @@
+// Level 3 - App 3: Verifier, receives data from proxy
+#include <iostream>
+#include <string>
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#include <fstream>
+#include <cryptlib.h>
+#include <rsa.h>
+#include <osrng.h>
+#include <hex.h>
+#include <files.h>
+#include <base64.h>
+#include <pssr.h>
+#include <sha.h>
+#pragma comment(lib, "ws2_32.lib")
+
+using namespace std;
+using namespace CryptoPP;
+
+bool verifySignature(const string& message, const string& hexSignature, RSA::PublicKey& key) {
+    string decodedSig;
+    HexDecoder decoder;
+    decoder.Put((byte*)hexSignature.data(), hexSignature.size());
+    decoder.MessageEnd();
+
+    size_t sigLen = decoder.MaxRetrievable();
+    decodedSig.resize(sigLen);
+    decoder.Get((byte*)&decodedSig[0], sigLen);
+
+    RSASS<PSS, SHA256>::Verifier verifier(key);
+    try {
+        StringSource(decodedSig + message, true,
+            new SignatureVerificationFilter(verifier, NULL,
+                SignatureVerificationFilter::THROW_EXCEPTION |
+                SignatureVerificationFilter::SIGNATURE_AT_BEGIN)
+        );
+        return true;
+    } catch (...) {
+        return false;
+    }
+}
+
+int main() {
+    WSADATA wsaData;
+    WSAStartup(MAKEWORD(2, 2), &wsaData);
+
+    SOCKET verifierSock = socket(AF_INET, SOCK_STREAM, 0);
+    sockaddr_in addr;
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(5003);
+    addr.sin_addr.s_addr = INADDR_ANY;
+
+    bind(verifierSock, (sockaddr*)&addr, sizeof(addr));
+    listen(verifierSock, SOMAXCONN);
+
+    cout << "Verifier app listening on port 5003...\n";
+    SOCKET clientSock = accept(verifierSock, nullptr, nullptr);
+    char buffer[8192];
+    int bytesRead = recv(clientSock, buffer, sizeof(buffer), 0);
+    buffer[bytesRead] = '\0';
+
+    string data(buffer);
+    size_t pos1 = data.find('\n');
+    size_t pos2 = data.find('\n', pos1 + 1);
+
+    string message = data.substr(0, pos1);
+    string signature = data.substr(pos1 + 1, pos2 - pos1 - 1);
+    string pubKeyData = data.substr(pos2 + 1);
+
+    ofstream out("received_public.key");
+    out << pubKeyData;
+    out.close();
+
+    RSA::PublicKey pubKey;
+    pubKey.Load(FileSource("received_public.key", true).Ref());
+
+    bool valid = verifySignature(message, signature, pubKey);
+    cout << "\nReceived Message: " << message << endl;
+    cout << "Signature is " << (valid ? "VALID ✅" : "INVALID ❌") << endl;
+
+    closesocket(clientSock);
+    closesocket(verifierSock);
+    WSACleanup();
+    return 0;
+}
