@@ -1,0 +1,89 @@
+RSA Digital Signature Implementation (C++)
+
+This project implements RSA Digital Signatures in 3 levels using C++ and the Crypto++ library.
+
+--- What It Does
+
+- Level 1: One app signs a message, lets user tamper the signature, and verifies it.
+- Level 2: Two apps (client + server) communicate over sockets to sign and verify messages.
+- Level 3: Three apps simulate a real-world flow with a tamper-proxy between signer and verifier.
+
+---
+
+  Project Structure
+
+rsa_digital_signature_cpp/
+├── level1_single_app/
+│ └── main.cpp
+├── level2_two_apps/
+│ ├── signer_client.cpp
+│ └── verifier_server.cpp
+├── level3_three_apps/
+│ ├── signer_app1.cpp
+│ ├── tamper_proxy_app2.cpp
+│ └── verifier_app3.cpp
+
+yaml
+Copy
+Edit
+
+---
+
+ How to Run (Windows)
+
+ Level 1
+
+```bash
+cd level1_single_app
+g++ main.cpp -o level1 -lcryptopp -std=c++17
+./level1
+ Level 2 (in 2 terminals)
+Terminal 1:
+
+bash
+Copy
+Edit
+cd level2_two_apps
+g++ verifier_server.cpp -o verifier -lcryptopp -lws2_32
+./verifier
+Terminal 2:
+
+bash
+Copy
+Edit
+cd level2_two_apps
+g++ signer_client.cpp -o signer -lcryptopp -lws2_32
+./signer
+Level 3 (in 3 terminals)
+Terminal 1:
+
+bash
+Copy
+Edit
+cd level3_three_apps
+g++ verifier_app3.cpp -o verifier -lcryptopp -lws2_32
+./verifier
+Terminal 2:
+
+bash
+Copy
+Edit
+cd level3_three_apps
+g++ tamper_proxy_app2.cpp -o proxy -lws2_32
+./proxy
+Terminal 3:
+
+bash
+Copy
+Edit
+cd level3_three_apps
+g++ signer_app1.cpp -o signer -lcryptopp -lws2_32
+./signer
+How It Works
+A message is hashed (SHA-256).
+
+The hash is signed using the private RSA key.
+
+The public key is used to verify the signature.
+
+If tampered, the verification will fail.
